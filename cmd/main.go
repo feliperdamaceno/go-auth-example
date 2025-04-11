@@ -42,15 +42,15 @@ func HashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
-func IsValidatePassword(hashed string, password string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password))
+func ValidatePassword(hash string, password string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
 func GenerateAuthToken(tokenAuth *jwtauth.JWTAuth, token map[string]interface{}) (string, error) {
 	_, tokenString, err := tokenAuth.Encode(token)
 	if err != nil {
-		return "", err
+		return tokenString, err
 	}
 	return tokenString, nil
 }
@@ -78,7 +78,6 @@ func main() {
 		user := User{}
 
 		err := json.NewDecoder(r.Body).Decode(&user)
-
 		if err != nil || user.Email == "" || user.Password == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			payload := MessagePayload{Message: "Please provide valid credentials"}
@@ -98,9 +97,7 @@ func main() {
 		hashedPassword, err := HashPassword(user.Password)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			payload := MessagePayload{
-				Message: "Failed to hash the password",
-			}
+			payload := MessagePayload{Message: "Failed to hash the password"}
 			render.JSON(w, r, payload)
 			return
 		}
@@ -115,7 +112,7 @@ func main() {
 
 		err := json.NewDecoder(r.Body).Decode(&credentials)
 		if err != nil || credentials.Email == "" || credentials.Password == "" {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusForbidden)
 			payload := MessagePayload{Message: "Please provide valid credentials"}
 			render.JSON(w, r, payload)
 			return
@@ -131,7 +128,7 @@ func main() {
 			return
 		}
 
-		isValidPassword := IsValidatePassword(user.Password, credentials.Password)
+		isValidPassword := ValidatePassword(user.Password, credentials.Password)
 		if !isValidPassword {
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Println(user.Password)
@@ -148,9 +145,7 @@ func main() {
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			payload := MessagePayload{
-				Message: "Failed to generate auth token",
-			}
+			payload := MessagePayload{Message: "Failed to generate auth token"}
 			render.JSON(w, r, payload)
 			return
 		}
@@ -189,7 +184,7 @@ func main() {
 		user := database[email]
 
 		if user.Email == "" {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusNotFound)
 			payload := MessagePayload{
 				Message: fmt.Sprintf("User with email <%s> has not been found", email),
 			}
